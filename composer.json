@@ -1,10 +1,10 @@
 {
-	"name": "sers/yii-config",
-	"description": "Yii manage configuration from database",
-	"keywords": ["yii-config"],
-	"license": "BSD-3-Clause",
-	"type": "yii-extension",
-	"require": {
-        "yiisoft/yii":">=1.1.14"
-    }
+  "name": "sers/yii-config",
+  "description": "Yii manage configuration from database",
+  "keywords": ["yii-config"],
+  "license": "BSD-3-Clause",
+  "type": "yii-extension",
+  "require": {
+    "yiisoft/yii":"1.1.14"
+  }
 }
