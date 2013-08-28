@@ -1,3 +1,7 @@
 {
-	"name": "sers/yii-config"
+	"name": "sers/yii-config",
+	"description": "Yii manage configuration from database",
+	"keywords": ["yii-config"],
+	"license": "BSD-3-Clause",
+	"type": "yii-extension"
 }
