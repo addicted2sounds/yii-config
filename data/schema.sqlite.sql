@@ -1,0 +1,4 @@
+CREATE TABLE IF NOT EXISTS configs (
+    key VARCHAR(100) NOT NULL PRIMARY KEY,
+    value TEXT
+);
