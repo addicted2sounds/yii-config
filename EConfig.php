@@ -30,7 +30,7 @@ class EConfig extends CApplicationComponent
 	 * @var string
 	 */
 	public $tableName = 'configs';
-	
+
 	/**
 	 * Method for coding and decoding
 	 * serialize or json
@@ -58,7 +58,7 @@ class EConfig extends CApplicationComponent
 	 * Configs
 	 * @var array
 	 */
-	private $_configs;
+	private $_config;
 
 	/**
 	 * Init EConfig component
@@ -76,15 +76,79 @@ class EConfig extends CApplicationComponent
 		if($this->idCache !== NULL)
 		{
 			$this->_cache = Yii::app()->getComponent($this->idCache);
-			
+
 			if(!$this->_cache instanceof CCache && !$this->_cache instanceof CDummyCache)
 				throw new CException("EConfig.idCache \"{$this->idCache}\" is invalid.");
 
 			$this->_useCache = true;
 		}
 
-		// Load configs
-		$this->_loadData();
+		// Load config
+		$configs = array();
+		if($this->_useCache)
+		{
+			$configs = $this->_cache->get($this->cacheKey);
+
+			if(!is_array($configs))
+				$configs = array();
+		}
+
+
+		if(count($configs) === 0)
+		{
+			$dbReader = $this->_db->createCommand("SELECT * FROM {$this->tableName}")->query();
+
+			while(false !== ($row = $dbReader->read()))
+			{
+				$configs[$row['key']] = $row['value'];
+			}
+
+			if($this->_useCache)
+				$this->_cache->set($this->cacheKey, $configs);
+		}
+
+		$this->_config = $configs;
+	}
+
+	/**
+	 * Yii::app()->config->param1;
+	 * @param string $name
+	 * @return mixed
+	 */
+	public function __get($name)
+	{
+		return array_key_exists($name, $this->_config) ? $this->_get($name) : parent::__get($name);
+	}
+
+	/**
+	 * Yii::app()->config->param1 = "value";
+	 * @param string $name
+	 * @param mixed $value
+	 * @return mixed
+	 */
+	public function __set($name, $value)
+	{
+		return array_key_exists($name, $this->_config) ? $this->set($name) : parent::__set($name, $value);
+	}
+
+	/**
+	 * isset(Yii::app()->config->param1);
+	 * @param string $name
+	 * @return boolean
+	 */
+	public function __isset($name)
+	{
+		return array_key_exists($name, $this->_config) ? true : parent::__isset($name);
+	}
+	
+	/**
+	 * unset(Yii::app()->config->param1);
+	 * @param string $name
+	 * @return EConfig::delete()
+	 */
+	public function __unset($name)
+	{
+		return array_key_exists($name, $this->_config) ? $this->delete($name) : parent::__unset($name);
 	}
 
 	/**
@@ -121,7 +185,16 @@ class EConfig extends CApplicationComponent
 	 */
 	public function _get($name, $default = null)
 	{
-		return array_key_exists($name, $this->_configs) ? $this->_decode($this->_configs[$name]) : $default;
+		return array_key_exists($name, $this->_config) ? $this->_decode($this->_config[$name]) : $default;
+	}
+
+	/**
+	 * Returns all parameters
+	 * @return array
+	 */
+	public function getAll()
+	{
+		return $this->_decode($this->_config);
 	}
 
 	/**
@@ -137,7 +210,7 @@ class EConfig extends CApplicationComponent
 			$arDelete = array();
 			foreach($name as $key => $val)
 			{
-				$val = $this->_encode($val);
+				$val = $this->_merge($key, $val);
 
 				$arInsert[] = array(
 					'key' => $key,
@@ -146,7 +219,7 @@ class EConfig extends CApplicationComponent
 
 				$arDelete[] = $key;
 
-				$this->_configs[$key] = $val;
+				$this->_config[$key] = $val;
 			}
 			if(count($arInsert) > 0)
 			{
@@ -160,9 +233,9 @@ class EConfig extends CApplicationComponent
 		}
 		else
 		{
-			$value = $this->_encode($value);
+			$value = $this->_merge($name, $value);
 
-			if(array_key_exists($name, $this->_configs) === false)
+			if(array_key_exists($name, $this->_config) === false)
 			{
 				$this->_db->createCommand()->insert($this->tableName, array(
 					'key' => $name,
@@ -176,43 +249,34 @@ class EConfig extends CApplicationComponent
 				), '`key`=:key', array(':key' => $name));
 			}
 
-			$this->_configs[$name] = $value;
+			$this->_config[$name] = $value;
 		}
 
 		if($this->_useCache)
-			$this->_cache->set($this->cacheKey, $this->_configs);
+			$this->_cache->set($this->cacheKey, $this->_config);
 	}
 
 	/**
-	 * Loading config data
+	 * Merge parameters
+	 * @param string $name
+	 * @param mixed $value
+	 * @return mixed
 	 */
-	private function _loadData()
+	private function _merge($name, $value, $encode = true)
 	{
-		$configs = array();
-		if($this->_useCache)
+		if(is_array($value))
 		{
-			$configs = $this->_cache->get($this->cacheKey);
-			
-			if(!is_array($configs))
-				$configs = array();
+			$config = $this->_get($name);
+			if(is_array($config))
+				$value = CMap::mergeArray($config, $value);
 		}
 
-		if(count($configs) === 0)
-		{
-			$dbReader = $this->_db->createCommand("SELECT * FROM {$this->tableName}")->query();
+		if($encode === true)
+			$value = $this->_encode($value);
 
-			while(false !== ($row = $dbReader->read()))
-			{
-				$configs[$row['key']] = $row['value'];
-			}
-
-			if($this->_useCache)
-				$this->_cache->set($this->cacheKey, $configs);
-		}
-
-		$this->_configs = $configs;
+		return $value;
 	}
-	
+
 	/**
 	 * Encoding variable with the specified coding method
 	 * @param mixed $value
@@ -230,13 +294,13 @@ class EConfig extends CApplicationComponent
 			case 'json':
 				return CJSON::encode($value);
 				break;
-			
+
 			default:
 				throw new CException("EConfig.coding \"{$this->coding}\" is invalid.");
 				break;
 		}
 	}
-	
+
 	/**
 	 * Decoding variable with the specified coding method
 	 * @param mixed $value
@@ -254,10 +318,40 @@ class EConfig extends CApplicationComponent
 			case 'json':
 				return CJSON::decode($value);
 				break;
-			
+
 			default:
 				throw new CException("EConfig.coding \"{$this->coding}\" is invalid.");
 				break;
 		}
+	}
+
+	/**
+	 * Delete parameter
+	 * @param type $name
+	 */
+	public function delete($name)
+	{
+		if(array_key_exists($name, $this->_config))
+		{
+			$this->_db->createCommand()
+					->delete($this->tableName, '`key`=:key', array(':key' => $name));
+			unset($this->_config[$name]);
+			
+			if($this->_useCache)
+				$this->_cache->set($this->cacheKey, $this->_config);
+		}
+	}
+	
+	/**
+	 * Remove all options
+	 */
+	public function deleteAll()
+	{
+		$this->_db->createCommand()->delete($this->tableName);
+
+		if($this->_useCache)
+			$this->_cache->delete($this->cacheKey);
+
+		$this->_config = array();
 	}
 }
